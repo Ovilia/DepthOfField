@@ -157,6 +157,15 @@ function addObejects() {
                 textRepeat: {
                     type: 'f',
                     value: 1
+                },
+                
+                wSplitCnt: {
+                    type: 'f',
+                    value: 100
+                },
+                hSplitCnt: {
+                    type: 'f',
+                    value: 100
                 }
             },
             attributes: {},
@@ -174,6 +183,15 @@ function addObejects() {
                 textRepeat: {
                     type: 'f',
                     value: 16
+                },
+                
+                wSplitCnt: {
+                    type: 'f',
+                    value: 50
+                },
+                hSplitCnt: {
+                    type: 'f',
+                    value: 50
                 }
             },
             attributes: {},
