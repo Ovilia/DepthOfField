@@ -147,12 +147,15 @@ function start() {
 function addObejects() {
     var attributes = {};
     
+    var boxText = THREE.ImageUtils.loadTexture('image/box.jpg');
+    var planeText = THREE.ImageUtils.loadTexture('image/chess.png')
+    
     DofDemo.material.dof = {
         box: new THREE.ShaderMaterial({
             uniforms: {
                 texture: {
                     type: 't', 
-                    value: THREE.ImageUtils.loadTexture('image/box.jpg')
+                    value: boxText
                 },
                 textRepeat: {
                     type: 'f',
@@ -161,11 +164,11 @@ function addObejects() {
                 
                 wSplitCnt: {
                     type: 'f',
-                    value: 100
+                    value: boxText.image.width
                 },
                 hSplitCnt: {
                     type: 'f',
-                    value: 100
+                    value: boxText.image.height
                 }
             },
             attributes: {},
@@ -178,7 +181,7 @@ function addObejects() {
             uniforms: {
                 texture: {
                     type: 't', 
-                    value: THREE.ImageUtils.loadTexture('image/chess.png')
+                    value: planeText
                 },
                 textRepeat: {
                     type: 'f',
@@ -200,9 +203,7 @@ function addObejects() {
             transparent: true
         })
     };
-    DofDemo.material.dof.plane.uniforms.texture.value.wrapS 
-            = DofDemo.material.dof.plane.uniforms.texture.value.wrapT 
-            = THREE.RepeatWrapping;
+    planeText.wrapS = planeText.wrapT = THREE.RepeatWrapping;
 
     DofDemo.material.depth = new THREE.ShaderMaterial({
         uniforms: {},
