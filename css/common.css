@@ -1,0 +1,26 @@
+* {
+    padding: 0px;
+    margin: 0px;
+}
+
+body {
+    overflow: hidden;
+}
+
+#container {
+    background-color: #ccc;
+    cursor: move;
+}
+
+#loading {
+    width: 200px;
+    height: 100px;
+    padding: 50px;
+    background-color: #333;
+    color: #ccc;
+    position: absolute;
+    top: 300px;
+    -webkit-border-radius: 10px;
+    border-radius: 10px;
+    font-size: 30px;
+}
