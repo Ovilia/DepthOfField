@@ -16,8 +16,18 @@ var DofDemo = {
     shader: {
         dofVert: null,
         dofFrag: null,
-        depthFrag: null
+        
+        depthVert: null,
+        depthFrag: null,
+        
+        screenVert: null,
+        screenFrag: null
     },
+    
+    rttTexture: null,
+    rttScene: null,
+    rttRender: null,
+    rttCamera: null,
     
     material: {
         dof: null,
@@ -25,13 +35,17 @@ var DofDemo = {
         
         plane: null,
         box: null,
-        dragon: null
+        dragon: null,
+        
+        screen: null
     },
     
     mesh: {
         plane: null,
         box: null,
-        dragon: null
+        dragon: null,
+        
+        screenPlane: null
     },
     
     mousePressed: false,
@@ -41,7 +55,7 @@ var DofDemo = {
     gui: null,
     config: null,
     
-    useDof: true,
+    useDof: false,
     useDepth: false,
     
     largeScene: false
@@ -63,34 +77,48 @@ $(document).ready(function() {
             'top': (DofDemo.windowHeight - 200) / 2});
     
     // renderer
-    DofDemo.renderer = new THREE.WebGLRenderer({antialias: true});
+    DofDemo.renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        canvas: $('#canvas')[0],
+        preserveDrawingBuffer: true
+    });
     DofDemo.renderer.setSize(DofDemo.windowWidth, DofDemo.windowHeight);
     DofDemo.renderer.shadowMapEnabled = true;
     DofDemo.renderer.shadowMapSoft = true;
-    $('#container').append(DofDemo.renderer.domElement);
+    DofDemo.renderer.autoClear = false;
     
     // scene
     DofDemo.scene = new THREE.Scene();
-    DofDemo.sceneCube = new THREE.Scene();
+    // render to target scene
+    DofDemo.rttScene = new THREE.Scene();
     
-    // camera
-    DofDemo.camera = new THREE.PerspectiveCamera(
+    // render to target camera
+    DofDemo.rttCamera = new THREE.PerspectiveCamera(
             60, DofDemo.windowWidth / DofDemo.windowHeight, 1, 40000);
-    DofDemo.camera.position.set(750, 1000, 750);
-    DofDemo.camera.lookAt(new THREE.Vector3(0, 250, 0));
+    DofDemo.rttCamera.position.set(750, 1000, 750);
+    DofDemo.rttCamera.lookAt(new THREE.Vector3(0, 250, 0));
+    DofDemo.rttScene.add(DofDemo.rttCamera);
+    // camera
+    DofDemo.camera = new THREE.OrthographicCamera(-DofDemo.windowWidth / 2,
+            DofDemo.windowWidth / 2, DofDemo.windowHeight / 2, 
+            -DofDemo.windowHeight / 2, -10000, 10000);
+    DofDemo.camera.position.z = 1000;
     DofDemo.scene.add(DofDemo.camera);
     
     // light
     DofDemo.light = new THREE.PointLight(0xffcc66);
-    DofDemo.light.position = DofDemo.camera.position;
-    DofDemo.scene.add(DofDemo.light);
+    DofDemo.light.position = DofDemo.rttCamera.position;
+    DofDemo.rttScene.add(DofDemo.light);
     
     light2 = new THREE.SpotLight(0xffaa00);
     light2.position.set(0, 1500, 0);
     light2.shadowCameraFov = 90;
     light2.castShadow = true;
     light2.shadowDarkness = 0.5;
-    DofDemo.scene.add(light2);
+    DofDemo.rttScene.add(light2);
+    
+    // frame buffer
+    initFramebuffer();
     
     // shader
     loadShader();
@@ -144,7 +172,7 @@ function start() {
     run();
 }
 
-function addObejects() {
+function addObjects() {
     var attributes = {};
     
     var boxText = THREE.ImageUtils.loadTexture('image/box.jpg');
@@ -208,7 +236,7 @@ function addObejects() {
     DofDemo.material.depth = new THREE.ShaderMaterial({
         uniforms: {},
         attributes: {},
-        vertexShader: DofDemo.shader.dofVert,
+        vertexShader: DofDemo.shader.depthVert,
         fragmentShader: DofDemo.shader.depthFrag,
         transparent: true
     });
@@ -224,7 +252,7 @@ function addObejects() {
     DofDemo.mesh.plane = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000));
     DofDemo.mesh.plane.rotation.x = -Math.PI / 2;
     setMaterial('plane');
-    DofDemo.scene.add(DofDemo.mesh.plane);
+    DofDemo.rttScene.add(DofDemo.mesh.plane);
     
     // boxes
     var pos = [[350, 375, 200], [300, 150, 200], [0, 125, 700], 
@@ -244,15 +272,55 @@ function addObejects() {
         DofDemo.mesh.box[i].rotation = new THREE.Vector3(0, rot[i], 0);
         DofDemo.mesh.box[i].castShadow = true;
         DofDemo.mesh.box[i].receiveShadow = true;
-        DofDemo.scene.add(DofDemo.mesh.box[i]);
+        DofDemo.rttScene.add(DofDemo.mesh.box[i]);
     }
     setMaterial('box');
+    
+    // render to target material
+    DofDemo.material.screen = new THREE.ShaderMaterial({
+        uniforms: {
+            texture: {
+                type: 't',
+                value: DofDemo.rttTexture
+            },
+            textRepeat: {
+                type: 'f',
+                value: 1
+            },
+            
+            wSplitCnt: {
+                type: 'f',
+                value: DofDemo.windowWidth
+            },
+            hSplitCnt: {
+                type: 'f',
+                value: DofDemo.windowHeight
+            }
+        },
+        vertexShader: DofDemo.shader.dofVert,
+        fragmentShader: DofDemo.shader.dofFrag,
+        depthWrite: false
+    });
+    
+    // plane to render the final result
+    DofDemo.mesh.screenPlane = new THREE.Mesh(    
+        new THREE.PlaneGeometry(DofDemo.windowWidth, DofDemo.windowHeight),
+        DofDemo.material.screen);
+    DofDemo.mesh.screenPlane.position.z = -1000;
+    DofDemo.scene.add(DofDemo.mesh.screenPlane);
 }
 
 // call in each frame
 function run() {
     DofDemo.stats.begin();
     
+    DofDemo.renderer.clear();
+    
+    // render to texture
+    DofDemo.renderer.render(DofDemo.rttScene, DofDemo.rttCamera, 
+            DofDemo.rttTexture, true);
+
+    // render to screen
     DofDemo.renderer.render(DofDemo.scene, DofDemo.camera);
     
     DofDemo.stats.end();
@@ -270,7 +338,7 @@ function loadDragon() {
         DofDemo.model.dragon.scale = new THREE.Vector3(6000, 6000, 6000);
         DofDemo.model.dragon.position = new THREE.Vector3(0, -300, -500);
 
-        addObejects();
+        addObjects();
         start();
     });
     loader.load('model/dragon.obj', 'model/dragon.mtl');
@@ -290,13 +358,13 @@ function onMouseMove(event) {
         // rotate camera with mouse dragging
         var dx = event.clientX - DofDemo.mousePressX;
         var da = Math.PI * dx / DofDemo.windowWidth * 0.05;
-        var x = DofDemo.camera.position.x;
-        var z = DofDemo.camera.position.z;
+        var x = DofDemo.rttCamera.position.x;
+        var z = DofDemo.rttCamera.position.z;
         var cos = Math.cos(da);
         var sin = Math.sin(da);
-        DofDemo.camera.position.x = cos * x - sin * z;
-        DofDemo.camera.position.z = sin * x + cos * z;
-        DofDemo.camera.lookAt(new THREE.Vector3(0, 250, 0));
+        DofDemo.rttCamera.position.x = cos * x - sin * z;
+        DofDemo.rttCamera.position.z = sin * x + cos * z;
+        DofDemo.rttCamera.lookAt(new THREE.Vector3(0, 250, 0));
     }
 }
 
@@ -312,7 +380,7 @@ function onMouseUp() {
 
 function loadShader() {
     var loadedCnt = 0;
-    var totalCnt = 3; // 3 shaders
+    var totalCnt = 6; // 6 shaders
     
     function checkAllLoaded() {
         ++loadedCnt;
@@ -333,9 +401,27 @@ function loadShader() {
         checkAllLoaded();
     });
     
+    $.get('shader/depth.vs', function(data){
+        console.log('depth.vs loaded.');
+        DofDemo.shader.depthVert = data;
+        checkAllLoaded();
+    });
+    
     $.get('shader/depth.fs', function(data){
         console.log('depth.fs loaded.');
         DofDemo.shader.depthFrag = data;
+        checkAllLoaded();
+    });
+    
+    $.get('shader/screen.vs', function(data){
+        console.log('screen.vs loaded.');
+        DofDemo.shader.screenVert = data;
+        checkAllLoaded();
+    });
+    
+    $.get('shader/screen.fs', function(data){
+        console.log('screen.fs loaded.');
+        DofDemo.shader.screenFrag = data;
         checkAllLoaded();
     });
 }
@@ -358,4 +444,15 @@ function setMaterial(name) {
     } else {
         DofDemo.mesh[name].material = material;
     }
+}
+
+function initFramebuffer() {    
+    DofDemo.rttTexture = new THREE.WebGLRenderTarget(DofDemo.windowWidth, 
+            DofDemo.windowHeight, {
+        wrapS: THREE.RepeatWrapping,
+        wrapT: THREE.RepeatWrapping,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.NearestFilter,
+        format: THREE.RGBAFormat
+    });
 }
