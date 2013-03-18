@@ -56,21 +56,40 @@ var DofDemo = {
     config: null,
     
     useDof: false,
-    useDepth: false,
-    
-    largeScene: false
+    useDepth: false
 }
 
 $(document).ready(function() {
     // container
     DofDemo.windowWidth = $(window).innerWidth();
     DofDemo.windowHeight = $(window).innerHeight();
+    
     $('#container').css({
         width: DofDemo.windowWidth, 
         height: DofDemo.windowHeight})
-    .mousemove(onMouseMove)
-    .mousedown(onMouseDown)
-    .mouseup(onMouseUp);
+    
+    .mousemove(function(event) {
+        if (DofDemo.mousePressed) {
+            // rotate camera with mouse dragging
+            var dx = event.clientX - DofDemo.mousePressX;
+            var da = Math.PI * dx / DofDemo.windowWidth * 0.05;
+            var x = DofDemo.rttCamera.position.x;
+            var z = DofDemo.rttCamera.position.z;
+            var cos = Math.cos(da);
+            var sin = Math.sin(da);
+            DofDemo.rttCamera.position.x = cos * x - sin * z;
+            DofDemo.rttCamera.position.z = sin * x + cos * z;
+            DofDemo.rttCamera.lookAt(new THREE.Vector3(0, 250, 0));
+        }
+    })
+    .mousedown(function(event) {
+        DofDemo.mousePressed = true;
+        DofDemo.mousePressX = event.clientX;
+        DofDemo.mousePressY = event.clientY;
+    })
+    .mouseup(function() {
+        DofDemo.mousePressed = false;
+    });
     
     // loading
     $('#loading').css({'left': (DofDemo.windowWidth - 300) / 2,
@@ -110,7 +129,7 @@ $(document).ready(function() {
     DofDemo.light.position = DofDemo.rttCamera.position;
     DofDemo.rttScene.add(DofDemo.light);
     
-    light2 = new THREE.SpotLight(0xffaa00);
+    var light2 = new THREE.SpotLight(0xffaa00);
     light2.position.set(0, 1500, 0);
     light2.shadowCameraFov = 90;
     light2.castShadow = true;
@@ -124,54 +143,72 @@ $(document).ready(function() {
     loadShader();
 });
 
-// start rendering when loaded model
-function start() {
-    // stats
-    DofDemo.stats = new Stats();
-    DofDemo.stats.domElement.style.position = 'absolute';
-    DofDemo.stats.domElement.style.left = '0px';
-    DofDemo.stats.domElement.style.top = '0px';
-    document.body.appendChild(DofDemo.stats.domElement);
-    
-    // gui control
-    DofDemo.gui = new dat.GUI();
-    DofDemo.config = {
-        'Render Type': ['Depth of Field', 'z-buffer', 'None'],
-        'Render Dragon': false,
-        'Focal Length': 500,
-        'Focus Distance': 50,
-        'F-stop': 1.0
-    };
-    
-    DofDemo.gui.add(DofDemo.config, 'Render Type', 
-            ['Depth of Field', 'z-buffer', 'None']).onChange(function(value) {
-        if (value === 'Depth of Field') {
-            DofDemo.useDof = true;
-            DofDemo.useDepth = false;
-        } else if (value === 'z-buffer') {
-            DofDemo.useDof = false;
-            DofDemo.useDepth = true;
-        } else {
-            DofDemo.useDof = false;
-            DofDemo.useDepth = false;
-        }
-        setMaterial('plane');
-        setMaterial('box');
+// init frame buffer to get texture and depth data
+function initFramebuffer() {    
+    DofDemo.rttTexture = new THREE.WebGLRenderTarget(DofDemo.windowWidth, 
+            DofDemo.windowHeight, {
+        wrapS: THREE.RepeatWrapping,
+        wrapT: THREE.RepeatWrapping,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.NearestFilter,
+        format: THREE.RGBAFormat
     });
-    
-    DofDemo.gui.add(DofDemo.config, 'Render Dragon').onChange(function(value) {
-        toggleDragon();
-    });
-    
-    DofDemo.gui.add(DofDemo.config, 'Focal Length', 0, 2000);
-    DofDemo.gui.add(DofDemo.config, 'Focus Distance', 0, 200);
-    DofDemo.gui.add(DofDemo.config, 'F-stop', 0, 5);
-    
-    // show render
-    $('#loading').fadeOut();
-    run();
 }
 
+// load vertex shaders and fregment shaders
+function loadShader() {
+    var loadedCnt = 0;
+    var totalCnt = 6; // 6 shaders
+    
+    function checkAllLoaded() {
+        ++loadedCnt;
+        if (loadedCnt == totalCnt) {
+            addObjects();
+            initStatus();
+            
+            // start rendering
+            animate();
+        }
+    }
+    
+    $.get('shader/dof.vs', function(data){
+        console.log('dof.vs loaded.');
+        DofDemo.shader.dofVert = data;
+        checkAllLoaded();
+    });
+    
+    $.get('shader/dof.fs', function(data){
+        console.log('dof.fs loaded.');
+        DofDemo.shader.dofFrag = data;
+        checkAllLoaded();
+    });
+    
+    $.get('shader/depth.vs', function(data){
+        console.log('depth.vs loaded.');
+        DofDemo.shader.depthVert = data;
+        checkAllLoaded();
+    });
+    
+    $.get('shader/depth.fs', function(data){
+        console.log('depth.fs loaded.');
+        DofDemo.shader.depthFrag = data;
+        checkAllLoaded();
+    });
+    
+    $.get('shader/screen.vs', function(data){
+        console.log('screen.vs loaded.');
+        DofDemo.shader.screenVert = data;
+        checkAllLoaded();
+    });
+    
+    $.get('shader/screen.fs', function(data){
+        console.log('screen.fs loaded.');
+        DofDemo.shader.screenFrag = data;
+        checkAllLoaded();
+    });
+}
+
+// add objects in the scene
 function addObjects() {
     var attributes = {};
     
@@ -310,122 +347,6 @@ function addObjects() {
     DofDemo.scene.add(DofDemo.mesh.screenPlane);
 }
 
-// call in each frame
-function run() {
-    DofDemo.stats.begin();
-    
-    DofDemo.renderer.clear();
-    
-    // render to texture
-    DofDemo.renderer.render(DofDemo.rttScene, DofDemo.rttCamera, 
-            DofDemo.rttTexture, true);
-
-    // render to screen
-    DofDemo.renderer.render(DofDemo.scene, DofDemo.camera);
-    
-    DofDemo.stats.end();
-    
-    requestAnimationFrame(run);
-}
-
-function loadDragon() {
-    var loader = new THREE.OBJMTLLoader();
-    loader.addEventListener('load', function (event) {
-        console.log('Dragon loaded.');
-        
-        // add dragon to scene once loaded
-        DofDemo.model.dragon = event.content;
-        DofDemo.model.dragon.scale = new THREE.Vector3(6000, 6000, 6000);
-        DofDemo.model.dragon.position = new THREE.Vector3(0, -300, -500);
-
-        addObjects();
-        start();
-    });
-    loader.load('model/dragon.obj', 'model/dragon.mtl');
-}
-
-function toggleDragon() {
-    DofDemo.largeScene = !DofDemo.largeScene;
-    if (DofDemo.largeScene) {
-        DofDemo.scene.add(DofDemo.model.dragon);
-    } else {
-        DofDemo.scene.remove(DofDemo.model.dragon);
-    }
-}
-
-function onMouseMove(event) {
-    if (DofDemo.mousePressed) {
-        // rotate camera with mouse dragging
-        var dx = event.clientX - DofDemo.mousePressX;
-        var da = Math.PI * dx / DofDemo.windowWidth * 0.05;
-        var x = DofDemo.rttCamera.position.x;
-        var z = DofDemo.rttCamera.position.z;
-        var cos = Math.cos(da);
-        var sin = Math.sin(da);
-        DofDemo.rttCamera.position.x = cos * x - sin * z;
-        DofDemo.rttCamera.position.z = sin * x + cos * z;
-        DofDemo.rttCamera.lookAt(new THREE.Vector3(0, 250, 0));
-    }
-}
-
-function onMouseDown(event) {
-    DofDemo.mousePressed = true;
-    DofDemo.mousePressX = event.clientX;
-    DofDemo.mousePressY = event.clientY;
-}
-
-function onMouseUp() {
-    DofDemo.mousePressed = false;
-}
-
-function loadShader() {
-    var loadedCnt = 0;
-    var totalCnt = 6; // 6 shaders
-    
-    function checkAllLoaded() {
-        ++loadedCnt;
-        if (loadedCnt == totalCnt) {
-            loadDragon();
-        }
-    }
-    
-    $.get('shader/dof.vs', function(data){
-        console.log('dof.vs loaded.');
-        DofDemo.shader.dofVert = data;
-        checkAllLoaded();
-    });
-    
-    $.get('shader/dof.fs', function(data){
-        console.log('dof.fs loaded.');
-        DofDemo.shader.dofFrag = data;
-        checkAllLoaded();
-    });
-    
-    $.get('shader/depth.vs', function(data){
-        console.log('depth.vs loaded.');
-        DofDemo.shader.depthVert = data;
-        checkAllLoaded();
-    });
-    
-    $.get('shader/depth.fs', function(data){
-        console.log('depth.fs loaded.');
-        DofDemo.shader.depthFrag = data;
-        checkAllLoaded();
-    });
-    
-    $.get('shader/screen.vs', function(data){
-        console.log('screen.vs loaded.');
-        DofDemo.shader.screenVert = data;
-        checkAllLoaded();
-    });
-    
-    $.get('shader/screen.fs', function(data){
-        console.log('screen.fs loaded.');
-        DofDemo.shader.screenFrag = data;
-        checkAllLoaded();
-    });
-}
-
 // set object material or shader material
 function setMaterial(name) {
     if (DofDemo.useDof) {
@@ -446,13 +367,72 @@ function setMaterial(name) {
     }
 }
 
-function initFramebuffer() {    
-    DofDemo.rttTexture = new THREE.WebGLRenderTarget(DofDemo.windowWidth, 
-            DofDemo.windowHeight, {
-        wrapS: THREE.RepeatWrapping,
-        wrapT: THREE.RepeatWrapping,
-        minFilter: THREE.LinearFilter,
-        magFilter: THREE.NearestFilter,
-        format: THREE.RGBAFormat
+// init status before rendering
+function initStatus() {
+    // stats
+    DofDemo.stats = new Stats();
+    DofDemo.stats.domElement.style.position = 'absolute';
+    DofDemo.stats.domElement.style.left = '0px';
+    DofDemo.stats.domElement.style.top = '0px';
+    document.body.appendChild(DofDemo.stats.domElement);
+    
+    // gui control
+    DofDemo.gui = new dat.GUI();
+    DofDemo.config = {
+        'Render Type': ['Depth of Field', 'z-buffer', 'None'],
+        'Render Dragon': false,
+        'Focal Length': 500,
+        'Focus Distance': 50,
+        'F-stop': 1.0
+    };
+    
+    DofDemo.gui.add(DofDemo.config, 'Render Type', 
+            ['Depth of Field', 'z-buffer', 'None']).onChange(function(value) {
+        if (value === 'Depth of Field') {
+            DofDemo.useDof = true;
+            DofDemo.useDepth = false;
+        } else if (value === 'z-buffer') {
+            DofDemo.useDof = false;
+            DofDemo.useDepth = true;
+        } else {
+            DofDemo.useDof = false;
+            DofDemo.useDepth = false;
+        }
+        setMaterial('plane');
+        setMaterial('box');
     });
+    
+    DofDemo.gui.add(DofDemo.config, 'Render Dragon').onChange(function(value) {
+        toggleDragon();
+    });
+    
+    DofDemo.gui.add(DofDemo.config, 'Focal Length', 0, 2000);
+    DofDemo.gui.add(DofDemo.config, 'Focus Distance', 0, 200);
+    DofDemo.gui.add(DofDemo.config, 'F-stop', 0, 5);
+    
+    // show render
+    $('#loading').fadeOut();
+}
+
+// call in each frame
+function animate() {
+    DofDemo.stats.begin();
+    
+    render();
+    
+    requestAnimationFrame(animate);
+    
+    DofDemo.stats.end();
+}
+
+// render called by animate
+function render() {
+    DofDemo.renderer.clear();
+    
+    // render to texture
+    DofDemo.renderer.render(DofDemo.rttScene, DofDemo.rttCamera, 
+            DofDemo.rttTexture, true);
+
+    // render to screen
+    DofDemo.renderer.render(DofDemo.scene, DofDemo.camera);
 }
