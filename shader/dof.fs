@@ -5,6 +5,7 @@ precision highp float;
 varying vec2 vUv;
 
 uniform sampler2D texture;
+uniform sampler2D depth;
 uniform float wSplitCnt;
 uniform float hSplitCnt;
 

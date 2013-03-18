@@ -9,35 +9,25 @@ var DofDemo = {
     camera: null,
     light: null,
     
-    model: {
-        dragon: null,
-    },
-    
     shader: {
         dofVert: null,
         dofFrag: null,
         
         depthVert: null,
-        depthFrag: null,
-        
-        screenVert: null,
-        screenFrag: null
+        depthFrag: null
     },
     
     rttTexture: null,
+    rttDepth: null,
     rttScene: null,
     rttRender: null,
     rttCamera: null,
     
     material: {
-        dof: null,
         depth: null,
         
         plane: null,
-        box: null,
-        dragon: null,
-        
-        screen: null
+        box: null
     },
     
     mesh: {
@@ -55,9 +45,13 @@ var DofDemo = {
     gui: null,
     config: null,
     
-    useDof: false,
-    useDepth: false
-}
+    RenderType: {
+        ORIGINAL: 0,
+        DEPTH: 1,
+        DOF: 2
+    },
+    renderType: 2 // use DOF
+};
 
 $(document).ready(function() {
     // container
@@ -144,8 +138,19 @@ $(document).ready(function() {
 });
 
 // init frame buffer to get texture and depth data
-function initFramebuffer() {    
+function initFramebuffer() {
+    // texture information in frame buffer
     DofDemo.rttTexture = new THREE.WebGLRenderTarget(DofDemo.windowWidth, 
+            DofDemo.windowHeight, {
+        wrapS: THREE.RepeatWrapping,
+        wrapT: THREE.RepeatWrapping,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.NearestFilter,
+        format: THREE.RGBAFormat
+    });
+    
+    // depth information in frame buffer
+    DofDemo.rttDepth = new THREE.WebGLRenderTarget(DofDemo.windowWidth, 
             DofDemo.windowHeight, {
         wrapS: THREE.RepeatWrapping,
         wrapT: THREE.RepeatWrapping,
@@ -155,10 +160,10 @@ function initFramebuffer() {
     });
 }
 
-// load vertex shaders and fregment shaders
+// load vertex shaders and fragment shaders
 function loadShader() {
     var loadedCnt = 0;
-    var totalCnt = 6; // 6 shaders
+    var totalCnt = 4; // 4 shaders
     
     function checkAllLoaded() {
         ++loadedCnt;
@@ -194,82 +199,14 @@ function loadShader() {
         DofDemo.shader.depthFrag = data;
         checkAllLoaded();
     });
-    
-    $.get('shader/screen.vs', function(data){
-        console.log('screen.vs loaded.');
-        DofDemo.shader.screenVert = data;
-        checkAllLoaded();
-    });
-    
-    $.get('shader/screen.fs', function(data){
-        console.log('screen.fs loaded.');
-        DofDemo.shader.screenFrag = data;
-        checkAllLoaded();
-    });
 }
 
 // add objects in the scene
 function addObjects() {
-    var attributes = {};
-    
     var boxText = THREE.ImageUtils.loadTexture('image/box.jpg');
     var planeText = THREE.ImageUtils.loadTexture('image/chess.png')
     
-    DofDemo.material.dof = {
-        box: new THREE.ShaderMaterial({
-            uniforms: {
-                texture: {
-                    type: 't', 
-                    value: boxText
-                },
-                textRepeat: {
-                    type: 'f',
-                    value: 1
-                },
-                
-                wSplitCnt: {
-                    type: 'f',
-                    value: boxText.image.width
-                },
-                hSplitCnt: {
-                    type: 'f',
-                    value: boxText.image.height
-                }
-            },
-            attributes: {},
-            vertexShader: DofDemo.shader.dofVert,
-            fragmentShader: DofDemo.shader.dofFrag,
-            transparent: true
-        }),
-        
-        plane: new THREE.ShaderMaterial({
-            uniforms: {
-                texture: {
-                    type: 't', 
-                    value: planeText
-                },
-                textRepeat: {
-                    type: 'f',
-                    value: 16
-                },
-                
-                wSplitCnt: {
-                    type: 'f',
-                    value: 50
-                },
-                hSplitCnt: {
-                    type: 'f',
-                    value: 50
-                }
-            },
-            attributes: {},
-            vertexShader: DofDemo.shader.dofVert,
-            fragmentShader: DofDemo.shader.dofFrag,
-            transparent: true
-        })
-    };
-    planeText.wrapS = planeText.wrapT = THREE.RepeatWrapping;
-
+    // depth material
     DofDemo.material.depth = new THREE.ShaderMaterial({
         uniforms: {},
         attributes: {},
@@ -288,7 +225,6 @@ function addObjects() {
     });
     DofDemo.mesh.plane = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000));
     DofDemo.mesh.plane.rotation.x = -Math.PI / 2;
-    setMaterial('plane');
     DofDemo.rttScene.add(DofDemo.mesh.plane);
     
     // boxes
@@ -311,7 +247,6 @@ function addObjects() {
         DofDemo.mesh.box[i].receiveShadow = true;
         DofDemo.rttScene.add(DofDemo.mesh.box[i]);
     }
-    setMaterial('box');
     
     // render to target material
     DofDemo.material.screen = new THREE.ShaderMaterial({
@@ -320,9 +255,9 @@ function addObjects() {
                 type: 't',
                 value: DofDemo.rttTexture
             },
-            textRepeat: {
-                type: 'f',
-                value: 1
+            depth: {
+                type: 't',
+                value: DofDemo.rttDepth
             },
             
             wSplitCnt: {
@@ -348,22 +283,27 @@ function addObjects() {
 }
 
 // set object material or shader material
-function setMaterial(name) {
-    if (DofDemo.useDof) {
-        var material = DofDemo.material.dof[name];
-    } else if (DofDemo.useDepth) {
-        var material = DofDemo.material.depth;
-    } else {
-        var material = DofDemo.material[name];
-    }
-    if (DofDemo.mesh[name] instanceof Array) {
-        for (var i in DofDemo.mesh[name]) {
-            if (DofDemo.mesh[name][i]) {
-                DofDemo.mesh[name][i].material = material;
-            }
+// `renderType` should be either `DofDemo.RenderType.DEPTH` or 
+// `DofDemo.RenderType.ORIGINAL`, which is different from `DofDemo.renderType` 
+// since this function is called inside `render` function in different steps
+function setMaterial(renderType) {
+    var target = ['box', 'plane'];
+    for (var i in target) {
+        var name = target[i];
+        if (renderType === DofDemo.RenderType.DEPTH) {
+            var material = DofDemo.material.depth;
+        } else {
+            var material = DofDemo.material[name];
         }
-    } else {
-        DofDemo.mesh[name].material = material;
+        if (DofDemo.mesh[name] instanceof Array) {
+            for (var i in DofDemo.mesh[name]) {
+                if (DofDemo.mesh[name][i]) {
+                    DofDemo.mesh[name][i].material = material;
+                }
+            }
+        } else {
+            DofDemo.mesh[name].material = material;
+        }
     }
 }
 
@@ -385,20 +325,26 @@ function initStatus() {
         'F-stop': 1.0
     };
     
+    // gui event
     DofDemo.gui.add(DofDemo.config, 'Render Type', 
-            ['Depth of Field', 'z-buffer', 'None']).onChange(function(value) {
+            ['Depth of Field', 'Depth', 'Original'])
+    .onChange(function(value) {
         if (value === 'Depth of Field') {
-            DofDemo.useDof = true;
-            DofDemo.useDepth = false;
-        } else if (value === 'z-buffer') {
-            DofDemo.useDof = false;
-            DofDemo.useDepth = true;
+            DofDemo.renderType = DofDemo.RenderType.DOF;
+        } else if (value === 'Depth') {
+            DofDemo.renderType = DofDemo.RenderType.DEPTH;
         } else {
-            DofDemo.useDof = false;
-            DofDemo.useDepth = false;
+            DofDemo.renderType = DofDemo.RenderType.ORIGINAL;
         }
-        setMaterial('plane');
-        setMaterial('box');
+        
+        // set material to be original texture if is ORGINAL or DOF,
+        // set material to be depth texture if is DEPTH
+        // material will be set to depth later if is DOF
+        if (DofDemo.renderType === DofDemo.RenderType.DEPTH) {
+            setMaterial(DofDemo.RenderType.DEPTH);
+        } else {
+            setMaterial(DofDemo.RenderType.ORIGINAL);
+        }
     });
     
     DofDemo.gui.add(DofDemo.config, 'Focal Length', 0, 2000);
@@ -424,10 +370,22 @@ function animate() {
 function render() {
     DofDemo.renderer.clear();
     
-    // render to texture
-    DofDemo.renderer.render(DofDemo.rttScene, DofDemo.rttCamera, 
-            DofDemo.rttTexture, true);
-
-    // render to screen
-    DofDemo.renderer.render(DofDemo.scene, DofDemo.camera);
+    if (DofDemo.renderType === DofDemo.RenderType.DOF) {
+        // render to texture
+        setMaterial(DofDemo.RenderType.ORIGINAL);
+        DofDemo.renderer.render(DofDemo.rttScene, DofDemo.rttCamera, 
+                DofDemo.rttTexture, true);
+        
+        // render to depth
+        setMaterial(DofDemo.RenderType.DEPTH);
+        DofDemo.renderer.render(DofDemo.rttScene, DofDemo.rttCamera,
+                DofDemo.rttDepth, true);
+    
+        // render to screen
+        DofDemo.renderer.render(DofDemo.scene, DofDemo.camera);
+        
+    } else {
+        // render original or depth once
+        DofDemo.renderer.render(DofDemo.rttScene, DofDemo.rttCamera);
+    }
 }

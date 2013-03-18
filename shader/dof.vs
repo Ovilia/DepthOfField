@@ -5,12 +5,10 @@ precision highp float;
 
 varying vec2 vUv;
 
-uniform float textRepeat;
-
 void main()
 {    
     // passing texture to fragment shader
-    vUv = uv * textRepeat;
+    vUv = uv;
     
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
