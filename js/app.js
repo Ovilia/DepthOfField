@@ -380,7 +380,6 @@ function initStatus() {
     DofDemo.gui = new dat.GUI();
     DofDemo.config = {
         'Render Type': ['Depth of Field', 'z-buffer', 'None'],
-        'Render Dragon': false,
         'Focal Length': 500,
         'Focus Distance': 50,
         'F-stop': 1.0
@@ -400,10 +399,6 @@ function initStatus() {
         }
         setMaterial('plane');
         setMaterial('box');
-    });
-    
-    DofDemo.gui.add(DofDemo.config, 'Render Dragon').onChange(function(value) {
-        toggleDragon();
     });
     
     DofDemo.gui.add(DofDemo.config, 'Focal Length', 0, 2000);
