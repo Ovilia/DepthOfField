@@ -119,16 +119,12 @@ $(document).ready(function() {
     DofDemo.scene.add(DofDemo.camera);
     
     // light
-    DofDemo.light = new THREE.PointLight(0xffcc66);
+    DofDemo.light = new THREE.DirectionalLight(0xffffff, 1.0);
     DofDemo.light.position = DofDemo.rttCamera.position;
     DofDemo.rttScene.add(DofDemo.light);
-    
-    var light2 = new THREE.SpotLight(0xffaa00);
-    light2.position.set(0, 1500, 0);
-    light2.shadowCameraFov = 90;
-    light2.castShadow = true;
-    light2.shadowDarkness = 0.5;
-    DofDemo.rttScene.add(light2);
+    // ambient light
+    var ambient = new THREE.DirectionalLight(0xcccccc);
+    DofDemo.rttScene.add(ambient);
     
     // frame buffer
     initFramebuffer();
@@ -168,8 +164,8 @@ function loadShader() {
     function checkAllLoaded() {
         ++loadedCnt;
         if (loadedCnt == totalCnt) {
-            addObjects();
             initStatus();
+            addObjects();
             
             // start rendering
             animate();
@@ -201,14 +197,64 @@ function loadShader() {
     });
 }
 
+// init status before rendering
+function initStatus() {
+    // stats
+    DofDemo.stats = new Stats();
+    DofDemo.stats.domElement.style.position = 'absolute';
+    DofDemo.stats.domElement.style.left = '0px';
+    DofDemo.stats.domElement.style.top = '0px';
+    document.body.appendChild(DofDemo.stats.domElement);
+    
+    // gui control
+    DofDemo.gui = new dat.GUI();
+    DofDemo.config = {
+        'Render Type': ['Depth of Field', 'z-buffer', 'None'],
+        'Aperture': 1 / 16,
+        'Focal Length': 500,
+        'Focus Distance': 50
+    };
+    
+    // gui event
+    DofDemo.gui.add(DofDemo.config, 'Render Type', 
+            ['Depth of Field', 'Depth', 'Original'])
+    .onChange(function(value) {
+        if (value === 'Depth of Field') {
+            DofDemo.renderType = DofDemo.RenderType.DOF;
+        } else if (value === 'Depth') {
+            DofDemo.renderType = DofDemo.RenderType.DEPTH;
+        } else {
+            DofDemo.renderType = DofDemo.RenderType.ORIGINAL;
+        }
+        
+        // set material to be original texture if is ORGINAL or DOF,
+        // set material to be depth texture if is DEPTH
+        // material will be set to depth later if is DOF
+        if (DofDemo.renderType === DofDemo.RenderType.DEPTH) {
+            setMaterial(DofDemo.RenderType.DEPTH);
+        } else {
+            setMaterial(DofDemo.RenderType.ORIGINAL);
+        }
+    });
+    
+    DofDemo.gui.add(DofDemo.config, 'Aperture', 0, 10);
+    DofDemo.gui.add(DofDemo.config, 'Focal Length', 0, 2000);
+    DofDemo.gui.add(DofDemo.config, 'Focus Distance', 0, 200);
+    
+    // show render
+    $('#loading').fadeOut();
+}
+
 // add objects in the scene
 function addObjects() {
-    var boxText = THREE.ImageUtils.loadTexture('image/box.jpg');
-    var planeText = THREE.ImageUtils.loadTexture('image/chess.png')
-    
     // depth material
     DofDemo.material.depth = new THREE.ShaderMaterial({
-        uniforms: {},
+        uniforms: {
+            farmostDepth: {
+                type: 'f',
+                value: 500
+            }
+        },
         attributes: {},
         vertexShader: DofDemo.shader.depthVert,
         fragmentShader: DofDemo.shader.depthFrag,
@@ -216,7 +262,7 @@ function addObjects() {
     });
     
     // plane
-    var chessTexture = THREE.ImageUtils.loadTexture('image/chess.png');
+    var chessTexture = THREE.ImageUtils.loadTexture('image/chess.jpg');
     chessTexture.wrapS = chessTexture.wrapT = THREE.RepeatWrapping;
     chessTexture.repeat.set(16, 16);
     DofDemo.material.plane = new THREE.MeshLambertMaterial({
@@ -243,8 +289,6 @@ function addObjects() {
         DofDemo.mesh.box[i].position = new THREE.Vector3(
                 pos[i][0], pos[i][1], pos[i][2]);
         DofDemo.mesh.box[i].rotation = new THREE.Vector3(0, rot[i], 0);
-        DofDemo.mesh.box[i].castShadow = true;
-        DofDemo.mesh.box[i].receiveShadow = true;
         DofDemo.rttScene.add(DofDemo.mesh.box[i]);
     }
     
@@ -267,6 +311,19 @@ function addObjects() {
             hSplitCnt: {
                 type: 'f',
                 value: DofDemo.windowHeight
+            },
+            
+            aperture: {
+                type: 'f',
+                value: DofDemo.config['Aperture']
+            },
+            focusDistance: {
+                type: 'f',
+                value: DofDemo.config['Focus Distance']
+            },
+            focalLength: {
+                type: 'f',
+                value: DofDemo.config['Focal Length']
             }
         },
         vertexShader: DofDemo.shader.dofVert,
@@ -305,54 +362,6 @@ function setMaterial(renderType) {
             DofDemo.mesh[name].material = material;
         }
     }
-}
-
-// init status before rendering
-function initStatus() {
-    // stats
-    DofDemo.stats = new Stats();
-    DofDemo.stats.domElement.style.position = 'absolute';
-    DofDemo.stats.domElement.style.left = '0px';
-    DofDemo.stats.domElement.style.top = '0px';
-    document.body.appendChild(DofDemo.stats.domElement);
-    
-    // gui control
-    DofDemo.gui = new dat.GUI();
-    DofDemo.config = {
-        'Render Type': ['Depth of Field', 'z-buffer', 'None'],
-        'Focal Length': 500,
-        'Focus Distance': 50,
-        'F-stop': 1.0
-    };
-    
-    // gui event
-    DofDemo.gui.add(DofDemo.config, 'Render Type', 
-            ['Depth of Field', 'Depth', 'Original'])
-    .onChange(function(value) {
-        if (value === 'Depth of Field') {
-            DofDemo.renderType = DofDemo.RenderType.DOF;
-        } else if (value === 'Depth') {
-            DofDemo.renderType = DofDemo.RenderType.DEPTH;
-        } else {
-            DofDemo.renderType = DofDemo.RenderType.ORIGINAL;
-        }
-        
-        // set material to be original texture if is ORGINAL or DOF,
-        // set material to be depth texture if is DEPTH
-        // material will be set to depth later if is DOF
-        if (DofDemo.renderType === DofDemo.RenderType.DEPTH) {
-            setMaterial(DofDemo.RenderType.DEPTH);
-        } else {
-            setMaterial(DofDemo.RenderType.ORIGINAL);
-        }
-    });
-    
-    DofDemo.gui.add(DofDemo.config, 'Focal Length', 0, 2000);
-    DofDemo.gui.add(DofDemo.config, 'Focus Distance', 0, 200);
-    DofDemo.gui.add(DofDemo.config, 'F-stop', 0, 5);
-    
-    // show render
-    $('#loading').fadeOut();
 }
 
 // call in each frame
