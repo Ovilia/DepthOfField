@@ -9,6 +9,11 @@ var DofDemo = {
     camera: null,
     light: null,
     
+    clip: {
+        near: 1,
+        far: 5000,
+    },
+    
     shader: {
         dofVert: null,
         dofFrag: null,
@@ -58,11 +63,28 @@ $(document).ready(function() {
     DofDemo.windowWidth = $(window).innerWidth();
     DofDemo.windowHeight = $(window).innerHeight();
     
+    $(window).resize(function() {
+        DofDemo.windowWidth = $(window).innerWidth();
+        DofDemo.windowHeight = $(window).innerHeight();
+        
+        $('#container,canvas').css({
+            width: DofDemo.windowWidth, 
+            height: DofDemo.windowHeight
+        });
+        
+        DofDemo.material.screen.wSplitCnt = DofDemo.windowWidth;
+        DofDemo.material.screen.hSplitCnt = DofDemo.windowHeight;
+        
+        DofDemo.rttCamera.aspect = DofDemo.windowWidth / DofDemo.windowHeight;
+        DofDemo.rttCamera.updateProjectionMatrix();
+        
+        DofDemo.renderer.setSize(DofDemo.windowWidth, DofDemo.windowHeight);
+    })
+    
     $('#container').css({
         width: DofDemo.windowWidth, 
-        height: DofDemo.windowHeight})
-    
-    .mousemove(function(event) {
+        height: DofDemo.windowHeight
+    }).mousemove(function(event) {
         if (DofDemo.mousePressed) {
             // rotate camera with mouse dragging
             var dx = event.clientX - DofDemo.mousePressX;
@@ -75,13 +97,11 @@ $(document).ready(function() {
             DofDemo.rttCamera.position.z = sin * x + cos * z;
             DofDemo.rttCamera.lookAt(new THREE.Vector3(0, 250, 0));
         }
-    })
-    .mousedown(function(event) {
+    }).mousedown(function(event) {
         DofDemo.mousePressed = true;
         DofDemo.mousePressX = event.clientX;
         DofDemo.mousePressY = event.clientY;
-    })
-    .mouseup(function() {
+    }).mouseup(function() {
         DofDemo.mousePressed = false;
     });
     
@@ -99,6 +119,7 @@ $(document).ready(function() {
     DofDemo.renderer.shadowMapEnabled = true;
     DofDemo.renderer.shadowMapSoft = true;
     DofDemo.renderer.autoClear = false;
+    DofDemo.renderer.setClearColor(0x000000);
     
     // scene
     DofDemo.scene = new THREE.Scene();
@@ -107,7 +128,8 @@ $(document).ready(function() {
     
     // render to target camera
     DofDemo.rttCamera = new THREE.PerspectiveCamera(
-            60, DofDemo.windowWidth / DofDemo.windowHeight, 1, 40000);
+            60, DofDemo.windowWidth / DofDemo.windowHeight,
+            DofDemo.clip.near, DofDemo.clip.far);
     DofDemo.rttCamera.position.set(750, 1000, 750);
     DofDemo.rttCamera.lookAt(new THREE.Vector3(0, 250, 0));
     DofDemo.rttScene.add(DofDemo.rttCamera);
@@ -210,36 +232,44 @@ function initStatus() {
     DofDemo.gui = new dat.GUI();
     DofDemo.config = {
         'Render Type': ['Depth of Field', 'z-buffer', 'None'],
-        'Aperture': 1 / 16,
+        'Max CoC Radius': 10,
         'Focal Length': 500,
-        'Focus Distance': 50
+        'Focus Distance': 500
     };
     
     // gui event
     DofDemo.gui.add(DofDemo.config, 'Render Type', 
             ['Depth of Field', 'Depth', 'Original'])
-    .onChange(function(value) {
-        if (value === 'Depth of Field') {
-            DofDemo.renderType = DofDemo.RenderType.DOF;
-        } else if (value === 'Depth') {
-            DofDemo.renderType = DofDemo.RenderType.DEPTH;
-        } else {
-            DofDemo.renderType = DofDemo.RenderType.ORIGINAL;
-        }
-        
-        // set material to be original texture if is ORGINAL or DOF,
-        // set material to be depth texture if is DEPTH
-        // material will be set to depth later if is DOF
-        if (DofDemo.renderType === DofDemo.RenderType.DEPTH) {
-            setMaterial(DofDemo.RenderType.DEPTH);
-        } else {
-            setMaterial(DofDemo.RenderType.ORIGINAL);
-        }
-    });
+        .onChange(function(value) {
+            if (value === 'Depth of Field') {
+                DofDemo.renderType = DofDemo.RenderType.DOF;
+            } else if (value === 'Depth') {
+                DofDemo.renderType = DofDemo.RenderType.DEPTH;
+            } else {
+                DofDemo.renderType = DofDemo.RenderType.ORIGINAL;
+            }
+            
+            // set material to be original texture if is ORGINAL or DOF,
+            // set material to be depth texture if is DEPTH
+            // material will be set to depth later if is DOF
+            if (DofDemo.renderType === DofDemo.RenderType.DEPTH) {
+                setMaterial(DofDemo.RenderType.DEPTH);
+            } else {
+                setMaterial(DofDemo.RenderType.ORIGINAL);
+            }
+        });
     
-    DofDemo.gui.add(DofDemo.config, 'Aperture', 0, 10);
-    DofDemo.gui.add(DofDemo.config, 'Focal Length', 0, 2000);
-    DofDemo.gui.add(DofDemo.config, 'Focus Distance', 0, 200);
+    DofDemo.gui.add(DofDemo.config, 'Max CoC Radius', 0, 20)
+        .onChange(function(value) {
+            DofDemo.material.screen.uniforms.maxCoc.value = value;
+        });
+        
+    DofDemo.gui.add(DofDemo.config, 'Focal Length', 0, 2000);    
+    
+    DofDemo.gui.add(DofDemo.config, 'Focus Distance', 0, 5000)
+        .onChange(function(value) {
+            DofDemo.material.screen.uniforms.focusDistance.value = value;
+        });
     
     // show render
     $('#loading').fadeOut();
@@ -313,17 +343,30 @@ function addObjects() {
                 value: DofDemo.windowHeight
             },
             
-            aperture: {
-                type: 'f',
-                value: DofDemo.config['Aperture']
-            },
+            // world position which is exactly in focus
             focusDistance: {
                 type: 'f',
                 value: DofDemo.config['Focus Distance']
             },
+            // length of objects in focus
             focalLength: {
                 type: 'f',
                 value: DofDemo.config['Focal Length']
+            },
+            
+            clipNear: {
+                type: 'f',
+                value: DofDemo.clip.near
+            },
+            clipFar: {
+                type: 'f',
+                value: DofDemo.clip.far
+            },
+            
+            // max CoC, which should not be larger than MAX_RADIUS in dof.fs
+            maxCoc: {
+                type: 'i',
+                value: DofDemo.config['Max CoC Radius']
             }
         },
         vertexShader: DofDemo.shader.dofVert,
