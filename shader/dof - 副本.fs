@@ -30,23 +30,15 @@ void main() {
             + clipNear;
     
     // calculate CoC
-    //int coc = int(abs(zbuffer - focusDistance) * MAX_RADIUS_F /
-    //              max(clipFar - focusDistance, focusDistance - clipNear));
-    float distance = abs(zbuffer - focusDistance);
-    if (distance < focalLength / 2.0) {
-        distance = 0.0;
-    } else {
-        distance = abs(distance - focalLength / 2.0);
-    }
-    int coc = int(distance / (clipFar - clipNear) * float(maxCoc));
+    /*int coc = int(abs(zbuffer - focusDistance) * MAX_RADIUS_F /
+                  max(clipFar - focusDistance, focusDistance - clipNear));
     coc = coc < maxCoc ? coc : maxCoc;
     int cocDouble = coc * 2;
-    
+    */
     
     vec4 sum;
     float cnt = 0.0;
-    int maxCocDouble = maxCoc * 2;
-    for (int i = 0; i < MAX_LENGTH; ++i) {
+    /*for (int i = 0; i < MAX_LENGTH; ++i) {
         if (i > cocDouble) {
             break;
         }
@@ -61,13 +53,13 @@ void main() {
             if (abs(texture2D(depth, neighbor).z - texture2D(depth, vUv).z)
                     < 1.0 / layerCount) {
                 sum += texture2D(texture, neighbor);
-                cnt += 1.0;
+                cnt += 1;
             }
         }
-    }
+    }*/
     
     // spreading
-    /*
+    int maxCocDouble = maxCoc * 2;
     for (int i = 0; i < MAX_LENGTH; ++i) {
         if (i > maxCocDouble) {
             break;
@@ -94,7 +86,7 @@ void main() {
                 }
             }
         }
-    }*/
+    }
     
     vec4 color;
     if (cnt > 0.0) {
@@ -103,6 +95,5 @@ void main() {
         color = texture2D(texture, vUv);
     }
     float c = cnt;
-    float cc = float(cocDouble);
-    gl_FragColor = color;//vec4(cc / 20.0, cc / 20.0, cc / 20.0, 1.0);
+    gl_FragColor = vec4(c, c, c, 1.0);
 }

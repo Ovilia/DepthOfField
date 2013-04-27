@@ -25,7 +25,6 @@ var DofDemo = {
     rttTexture: null,
     rttDepth: null,
     rttScene: null,
-    rttRender: null,
     rttCamera: null,
     
     material: {
@@ -116,8 +115,6 @@ $(document).ready(function() {
         preserveDrawingBuffer: true
     });
     DofDemo.renderer.setSize(DofDemo.windowWidth, DofDemo.windowHeight);
-    DofDemo.renderer.shadowMapEnabled = true;
-    DofDemo.renderer.shadowMapSoft = true;
     DofDemo.renderer.autoClear = false;
     DofDemo.renderer.setClearColor(0x000000);
     
@@ -234,7 +231,8 @@ function initStatus() {
         'Render Type': ['Depth of Field', 'z-buffer', 'None'],
         'Max CoC Radius': 10,
         'Focal Length': 500,
-        'Focus Distance': 500
+        'Focus Distance': 2000,
+        'Layer Count': 5
     };
     
     // gui event
@@ -264,11 +262,19 @@ function initStatus() {
             DofDemo.material.screen.uniforms.maxCoc.value = value;
         });
         
-    DofDemo.gui.add(DofDemo.config, 'Focal Length', 0, 2000);    
+    DofDemo.gui.add(DofDemo.config, 'Focal Length', 0, 1000)
+        .onChange(function(value) {
+            DofDemo.material.screen.uniforms.focalLength.value = value;
+        });;
     
     DofDemo.gui.add(DofDemo.config, 'Focus Distance', 0, 5000)
         .onChange(function(value) {
             DofDemo.material.screen.uniforms.focusDistance.value = value;
+        });
+        
+    DofDemo.gui.add(DofDemo.config, 'Layer Count', 0, 10)
+        .onChange(function(value) {
+            DofDemo.material.screen.uniforms.layerCount.value = value;
         });
     
     // show render
@@ -308,9 +314,7 @@ function addObjects() {
             [-400, 250, 300], [-500, 650, 300]];
     var rot = [0, Math.PI / 3, 0, Math.PI / 5, 0];
     var size = [150, 300, 250, 500, 300];
-    DofDemo.material.box = new THREE.MeshLambertMaterial({
-        map: THREE.ImageUtils.loadTexture('image/box.jpg')
-    });
+    DofDemo.material.box = new Array(pos.length);
     DofDemo.mesh.box = new Array(pos.length);
     for (var i in pos) {
         DofDemo.mesh.box[i] = new THREE.Mesh(
@@ -320,6 +324,10 @@ function addObjects() {
                 pos[i][0], pos[i][1], pos[i][2]);
         DofDemo.mesh.box[i].rotation = new THREE.Vector3(0, rot[i], 0);
         DofDemo.rttScene.add(DofDemo.mesh.box[i]);
+        
+        DofDemo.material.box[i] = new THREE.MeshLambertMaterial({
+            map: THREE.ImageUtils.loadTexture('image/box' + i + '.png')
+        });
     }
     
     // render to target material
@@ -367,6 +375,11 @@ function addObjects() {
             maxCoc: {
                 type: 'i',
                 value: DofDemo.config['Max CoC Radius']
+            },
+            // layer counts if using layered method
+            layerCount: {
+                type: 'f',
+                value: DofDemo.config['Layer Count']
             }
         },
         vertexShader: DofDemo.shader.dofVert,
@@ -396,9 +409,10 @@ function setMaterial(renderType) {
             var material = DofDemo.material[name];
         }
         if (DofDemo.mesh[name] instanceof Array) {
-            for (var i in DofDemo.mesh[name]) {
-                if (DofDemo.mesh[name][i]) {
-                    DofDemo.mesh[name][i].material = material;
+            for (var j in DofDemo.mesh[name]) {
+                if (DofDemo.mesh[name][j]) {
+                    DofDemo.mesh[name][j].material = material instanceof Array ?
+                            DofDemo.material[name][j] : material;
                 }
             }
         } else {
