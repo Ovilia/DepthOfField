@@ -14,95 +14,67 @@ uniform sampler2D depth;
 uniform float wSplitCnt;
 uniform float hSplitCnt;
 
-uniform float focusDistance;
-uniform float focalLength;
-
+// following uniforms are in world space
 uniform float clipNear;
 uniform float clipFar;
+uniform float focalLength;
+uniform float focusDistance;
+uniform float minC;
+uniform float maxC;
+uniform float aperture;
 
-uniform int maxCoc;
-uniform float layerCount;
+// following uniform is in screen space
+uniform float maxBlur;
+
+// get world depth position from screen depth information
+// screenDepth from 0.0 to 1.0
+float getWorldDepth(float screenDepth) {
+    return (1.0 - screenDepth) * (clipFar - clipNear) + clipNear;
+}
+
+// get blur coc from world depth
+float getCoc(float worldDepth) {
+    float cWorld = abs(focusDistance * focalLength * aperture /
+            (focusDistance - focalLength)
+            * (1.0 - focusDistance / worldDepth));
+    if (cWorld < minC) {
+        return 0.0;
+    } else if (cWorld < maxC) {
+        return maxBlur * (cWorld - minC) / (maxC - minC);
+    } else {
+        return maxBlur;
+    }
+}
 
 void main() {
-    // depth was from 0.0 to 1.0
-    // map it in world space, which is from clipNear to clipFar
-    float zbuffer = (1.0 - texture2D(depth, vUv).r) * (clipFar - clipNear)
-            + clipNear;
+    float zWorld = getWorldDepth(texture2D(depth, vUv).r);
+    float thisCoc = getCoc(zWorld);
     
-    // calculate CoC
-    //int coc = int(abs(zbuffer - focusDistance) * MAX_RADIUS_F /
-    //              max(clipFar - focusDistance, focusDistance - clipNear));
-    float distance = abs(zbuffer - focusDistance);
-    if (distance < focalLength / 2.0) {
-        distance = 0.0;
-    } else {
-        distance = abs(distance - focalLength / 2.0);
-    }
-    int coc = int(distance / (clipFar - clipNear) * float(maxCoc));
-    coc = coc < maxCoc ? coc : maxCoc;
-    int cocDouble = coc * 2;
-    
-    
+    // do blur
     vec4 sum;
-    float cnt = 0.0;
-    int maxCocDouble = maxCoc * 2;
-    for (int i = 0; i < MAX_LENGTH; ++i) {
-        if (i > cocDouble) {
-            break;
-        }
-        for (int j = 0; j < MAX_LENGTH; ++j) {
-            if (j > cocDouble) {
-                break;
-            }
-            vec2 neighbor = vec2(vUv.x + float(i - coc) / wSplitCnt,
-                                 vUv.y + float(j - coc) / hSplitCnt);
-            // blur those in front
-            //if (texture2D(depth, neighbor).z - texture2D(depth, vUv).z > 0.001) {
-            if (abs(texture2D(depth, neighbor).z - texture2D(depth, vUv).z)
-                    < 1.0 / layerCount) {
-                sum += texture2D(texture, neighbor);
-                cnt += 1.0;
-            }
-        }
-    }
-    
-    // spreading
-    /*
-    for (int i = 0; i < MAX_LENGTH; ++i) {
-        if (i > maxCocDouble) {
-            break;
-        }
-        for (int j = 0; j < MAX_LENGTH; ++j) {
-            if (j > maxCocDouble) {
-                break;
-            }
-            vec2 neighbor = vec2(vUv.x + float(i - maxCoc) / wSplitCnt,
-                                 vUv.y + float(j - maxCoc) / hSplitCnt);
-            float depthDelta = texture2D(depth, vUv).r
-                    - texture2D(depth, neighbor).r;
-            if (depthDelta < 0.0
-                    || (depthDelta > 0.0 && depthDelta < 1.0 / layerCount)) {
-                float zbufferN = (1.0 - texture2D(depth, neighbor).r)
-                        * (clipFar - clipNear) + clipNear;
-                // coc of neighbor
-                float cocN = abs(zbufferN - focusDistance) * float(maxCoc) /
-                        max(clipFar - focusDistance, focusDistance);
-                if (float(i - maxCoc) < cocN && float(i - maxCoc) > -cocN
-                        && float(j - maxCoc) < cocN && float(j - maxCoc) > -cocN) {
+    int cnt = 0;
+    int cocLength = 2 * int(thisCoc);
+    for (int i = 0; i < MAX_RADIUS; ++i) {
+        if (i < cocLength) {
+            for (int j = 0; j < MAX_RADIUS; ++j) {
+                if (j < cocLength) {
+                    vec2 neighbor = vec2(
+                            vUv.x + (float(i) - thisCoc) / wSplitCnt,
+                            vUv.y + (float(j) - thisCoc) / hSplitCnt);
                     sum += texture2D(texture, neighbor);
-                    cnt += 0.01;
+                    cnt += 1;
                 }
             }
+        } else {
+            break;
         }
-    }*/
-    
-    vec4 color;
-    if (cnt > 0.0) {
-        color = sum / cnt;
-    } else {
-        color = texture2D(texture, vUv);
     }
-    float c = cnt;
-    float cc = float(cocDouble);
-    gl_FragColor = color;//vec4(cc / 20.0, cc / 20.0, cc / 20.0, 1.0);
+    
+    if (cnt == 0) {
+        gl_FragColor = texture2D(texture, vUv);
+    } else {
+        float cntFloat = float(cnt);
+        gl_FragColor = vec4(sum.r / cntFloat, sum.g / cntFloat,
+                sum.b / cntFloat, 1.0);
+    }
 }
