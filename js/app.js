@@ -229,6 +229,11 @@ function initStatus() {
     DofDemo.gui = new dat.GUI();
     DofDemo.config = {
         'Render Type': ['Depth of Field', 'z-buffer', 'None'],
+        'Algorithm': {
+            'Forward-mapped': 0,
+            'Reversed-mapped': 1,
+            'Layered': 2
+        },
         'Focal Length': 0.1,
         'Focus Distance': 2,
         'Min CoC': 1,
@@ -260,6 +265,14 @@ function initStatus() {
             }
         });
         
+    DofDemo.gui.add(DofDemo.config, 'Algorithm', {
+            'Forward-mapped': 0,
+            'Reversed-mapped': 1,
+            'Layered': 2
+        }).onChange(function(value) {
+            DofDemo.material.screen.uniforms.algorithm.value = value;
+        });
+        
     DofDemo.gui.add(DofDemo.config, 'Focal Length', 0.01, 1)
         .onChange(function(value) {
             DofDemo.material.screen.uniforms.focalLength.value = value * 1000;
@@ -281,7 +294,7 @@ function initStatus() {
             DofDemo.material.screen.uniforms.maxC.value = value * 1000;
         });
     
-    DofDemo.gui.add(DofDemo.config, 'Max Blur', 0, 10)
+    DofDemo.gui.add(DofDemo.config, 'Max Blur', 0, 20)
         .onChange(function(value) {
             DofDemo.material.screen.uniforms.maxBlur.value = value;
         });
@@ -368,6 +381,11 @@ function addObjects() {
             hSplitCnt: {
                 type: 'f',
                 value: DofDemo.windowHeight
+            },
+            
+            algorithm: {
+                type: 'i',
+                value: 0
             },
             
             // world position which is exactly in focus

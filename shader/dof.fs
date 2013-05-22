@@ -14,6 +14,10 @@ uniform sampler2D depth;
 uniform float wSplitCnt;
 uniform float hSplitCnt;
 
+// 0 for forward-mapped, 1 for reversed-mapped, 2 for layered
+// default 0
+uniform int algorithm;
+
 // following uniforms are in world space
 uniform float clipNear;
 uniform float clipFar;
@@ -46,11 +50,57 @@ float getCoc(float worldDepth) {
     }
 }
 
-void main() {
-    float zWorld = getWorldDepth(texture2D(depth, vUv).r);
-    float thisCoc = getCoc(zWorld);
+// blur using forward-mapped algorithm, return blurred color
+vec4 getForwardResult(float thisCoc, float thisDepth) {
+    vec4 sum;
+    int cnt = 0;
+    int cocInt = int(maxBlur);
+    int cocLength = 2 * cocInt;
+    for (int i = 0; i < MAX_RADIUS; ++i) {
+        if (i < cocLength) {
+            for (int j = 0; j < MAX_RADIUS; ++j) {
+                if (j < cocLength) {
+                    vec2 neighbor = vec2(
+                            vUv.x + (float(i) - maxBlur) / wSplitCnt,
+                            vUv.y + (float(j) - maxBlur) / hSplitCnt);
+                    
+                    float neighborDepth = texture2D(depth, neighbor).r;
+                    float neighborZWorld = getWorldDepth(neighborDepth);
+                    int neighborCoc = int(getCoc(neighborZWorld));
+                    
+                    // blur if this is inside neighbor's coc
+                    if (i - cocInt < neighborCoc && i - cocInt > -neighborCoc
+                            && j - cocInt < neighborCoc
+                            && j - cocInt > -neighborCoc) {
+                        if (neighborDepth > thisDepth - 0.05
+                                && neighborDepth > 0.01) {
+                            sum += texture2D(texture, neighbor);
+                            cnt += 1;
+                        } else if (neighborDepth < 0.01) {
+                            // black border
+                            cnt += 1;
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+        } else {
+            break;
+        }
+    }
     
-    // do blur
+    if (cnt == 0) {
+        return texture2D(texture, vUv);
+    } else {
+        float cntFloat = float(cnt);
+        return vec4(sum.r / cntFloat, sum.g / cntFloat,
+                sum.b / cntFloat, 1.0);
+    }
+}
+
+// blur using reversed-mapped algorithm, return blurred color
+vec4 getReversedResult(float thisCoc) {
     vec4 sum;
     int cnt = 0;
     int cocLength = 2 * int(thisCoc);
@@ -63,6 +113,8 @@ void main() {
                             vUv.y + (float(j) - thisCoc) / hSplitCnt);
                     sum += texture2D(texture, neighbor);
                     cnt += 1;
+                } else {
+                    break;
                 }
             }
         } else {
@@ -71,10 +123,23 @@ void main() {
     }
     
     if (cnt == 0) {
-        gl_FragColor = texture2D(texture, vUv);
+        return texture2D(texture, vUv);
     } else {
         float cntFloat = float(cnt);
-        gl_FragColor = vec4(sum.r / cntFloat, sum.g / cntFloat,
+        return vec4(sum.r / cntFloat, sum.g / cntFloat,
                 sum.b / cntFloat, 1.0);
+    }
+}
+
+void main() {
+    float thisDepth = texture2D(depth, vUv).r;
+    float zWorld = getWorldDepth(thisDepth);
+    float thisCoc = getCoc(zWorld);
+    
+    // do blur
+    if (algorithm == 1) {
+        gl_FragColor = getReversedResult(thisCoc);
+    } else {
+        gl_FragColor = getForwardResult(thisCoc, thisDepth);
     }
 }
