@@ -229,9 +229,17 @@ function initStatus() {
     DofDemo.gui = new dat.GUI();
     DofDemo.config = {
         'Render Type': ['Depth of Field', 'z-buffer', 'None'],
-        'Max CoC Radius': 10,
-        'Focal Length': 500,
-        'Focus Distance': 2000,
+        'Algorithm': {
+            'Forward-mapped': 0,
+            'Reversed-mapped': 1,
+            'Layered': 2
+        },
+        'Focal Length': 0.1,
+        'Focus Distance': 2,
+        'Min CoC': 1,
+        'Max CoC': 2.5,
+        'Max Blur': 10,
+        'Aperture size': 0.05,
         'Layer Count': 5
     };
     
@@ -256,20 +264,44 @@ function initStatus() {
                 setMaterial(DofDemo.RenderType.ORIGINAL);
             }
         });
-    
-    DofDemo.gui.add(DofDemo.config, 'Max CoC Radius', 0, 20)
-        .onChange(function(value) {
-            DofDemo.material.screen.uniforms.maxCoc.value = value;
+        
+    DofDemo.gui.add(DofDemo.config, 'Algorithm', {
+            'Forward-mapped': 0,
+            'Reversed-mapped': 1,
+            'Layered': 2
+        }).onChange(function(value) {
+            DofDemo.material.screen.uniforms.algorithm.value = value;
         });
         
-    DofDemo.gui.add(DofDemo.config, 'Focal Length', 0, 1000)
+    DofDemo.gui.add(DofDemo.config, 'Focal Length', 0.01, 1)
         .onChange(function(value) {
-            DofDemo.material.screen.uniforms.focalLength.value = value;
+            DofDemo.material.screen.uniforms.focalLength.value = value * 1000;
         });;
     
-    DofDemo.gui.add(DofDemo.config, 'Focus Distance', 0, 5000)
+    DofDemo.gui.add(DofDemo.config, 'Focus Distance', 0.5, 7.5)
         .onChange(function(value) {
-            DofDemo.material.screen.uniforms.focusDistance.value = value;
+            DofDemo.material.screen.uniforms.focusDistance.value
+                    = value * 1000;
+        });
+        
+    DofDemo.gui.add(DofDemo.config, 'Min CoC', 0.05, 5)
+        .onChange(function(value) {
+            DofDemo.material.screen.uniforms.minC.value = value * 1000;
+        });;
+    
+    DofDemo.gui.add(DofDemo.config, 'Max CoC', 0.05, 5)
+        .onChange(function(value) {
+            DofDemo.material.screen.uniforms.maxC.value = value * 1000;
+        });
+    
+    DofDemo.gui.add(DofDemo.config, 'Max Blur', 0, 20)
+        .onChange(function(value) {
+            DofDemo.material.screen.uniforms.maxBlur.value = value;
+        });
+    
+    DofDemo.gui.add(DofDemo.config, 'Aperture size', 0.001, 0.1)
+        .onChange(function(value) {
+            DofDemo.material.screen.uniforms.aperture.value = value * 1000;
         });
         
     DofDemo.gui.add(DofDemo.config, 'Layer Count', 0, 10)
@@ -351,15 +383,20 @@ function addObjects() {
                 value: DofDemo.windowHeight
             },
             
+            algorithm: {
+                type: 'i',
+                value: 0
+            },
+            
             // world position which is exactly in focus
             focusDistance: {
                 type: 'f',
-                value: DofDemo.config['Focus Distance']
+                value: DofDemo.config['Focus Distance'] * 1000
             },
             // length of objects in focus
             focalLength: {
                 type: 'f',
-                value: DofDemo.config['Focal Length']
+                value: DofDemo.config['Focal Length'] * 1000
             },
             
             clipNear: {
@@ -371,15 +408,22 @@ function addObjects() {
                 value: DofDemo.clip.far
             },
             
-            // max CoC, which should not be larger than MAX_RADIUS in dof.fs
-            maxCoc: {
-                type: 'i',
-                value: DofDemo.config['Max CoC Radius']
-            },
-            // layer counts if using layered method
-            layerCount: {
+            aperture: {
                 type: 'f',
-                value: DofDemo.config['Layer Count']
+                value: DofDemo.config['Aperture size'] * 1000
+            },
+            
+            minC: {
+                type: 'f',
+                value: DofDemo.config['Min CoC'] * 1000
+            },
+            maxC: {
+                type: 'f',
+                value: DofDemo.config['Max CoC'] * 1000
+            },
+            maxBlur: {
+                type: 'f',
+                value: DofDemo.config['Max Blur']
             }
         },
         vertexShader: DofDemo.shader.dofVert,
