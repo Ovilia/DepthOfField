@@ -31,13 +31,14 @@ var DofDemo = {
         depth: null,
         
         plane: null,
-        box: null
+        box: null,
+        knot: null
     },
     
     mesh: {
         plane: null,
         box: null,
-        dragon: null,
+        knot: null,
         
         screenPlane: null
     },
@@ -238,8 +239,7 @@ function initStatus() {
         'Min CoC': 1,
         'Max CoC': 2.5,
         'Max Blur': 10,
-        'Aperture size': 0.05,
-        'Layer Count': 5
+        'Aperture Diameter': 0.05
     };
     
     // gui event
@@ -297,14 +297,9 @@ function initStatus() {
             DofDemo.material.screen.uniforms.maxBlur.value = value;
         });
     
-    DofDemo.gui.add(DofDemo.config, 'Aperture size', 0.001, 0.1)
+    DofDemo.gui.add(DofDemo.config, 'Aperture Diameter', 0.001, 0.1)
         .onChange(function(value) {
             DofDemo.material.screen.uniforms.aperture.value = value * 1000;
-        });
-        
-    DofDemo.gui.add(DofDemo.config, 'Layer Count', 0, 10)
-        .onChange(function(value) {
-            DofDemo.material.screen.uniforms.layerCount.value = value;
         });
         
     // show render
@@ -361,6 +356,14 @@ function addObjects() {
         });
     }
     
+    // torus knot
+    DofDemo.material.knot = new THREE.MeshLambertMaterial({
+        color: 0xffaa00
+    });
+    DofDemo.mesh.knot = new THREE.Mesh(new THREE.TorusKnotGeometry(100));
+    DofDemo.mesh.knot.position.set(100, 500, -500);
+    DofDemo.rttScene.add(DofDemo.mesh.knot);
+    
     // render to target material
     DofDemo.material.screen = new THREE.ShaderMaterial({
         uniforms: {
@@ -409,7 +412,7 @@ function addObjects() {
             
             aperture: {
                 type: 'f',
-                value: DofDemo.config['Aperture size'] * 1000
+                value: DofDemo.config['Aperture Diameter'] * 1000
             },
             
             minC: {
@@ -443,7 +446,7 @@ function addObjects() {
 // `DofDemo.RenderType.ORIGINAL`, which is different from `DofDemo.renderType` 
 // since this function is called inside `render` function in different steps
 function setMaterial(renderType) {
-    var target = ['box', 'plane'];
+    var target = ['box', 'plane', 'knot'];
     for (var i in target) {
         var name = target[i];
         if (renderType === DofDemo.RenderType.DEPTH) {
@@ -478,6 +481,10 @@ function animate() {
 // render called by animate
 function render() {
     DofDemo.renderer.clear();
+    
+    DofDemo.mesh.knot.rotation.x += 0.01;
+    DofDemo.mesh.knot.rotation.y += 0.02;
+    DofDemo.mesh.knot.rotation.z += 0.015;
     
     if (DofDemo.renderType === DofDemo.RenderType.DOF) {
         // render to texture
