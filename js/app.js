@@ -94,7 +94,7 @@ $(document).ready(function() {
             var sin = Math.sin(da);
             DofDemo.rttCamera.position.x = cos * x - sin * z;
             DofDemo.rttCamera.position.z = sin * x + cos * z;
-            DofDemo.rttCamera.lookAt(new THREE.Vector3(0, 250, 0));
+            DofDemo.rttCamera.lookAt(new THREE.Vector3(0, 0, 0));
         }
     }).mousedown(function(event) {
         DofDemo.mousePressed = true;
@@ -128,7 +128,7 @@ $(document).ready(function() {
             60, DofDemo.windowWidth / DofDemo.windowHeight,
             DofDemo.clip.near, DofDemo.clip.far);
     DofDemo.rttCamera.position.set(750, 1000, 750);
-    DofDemo.rttCamera.lookAt(new THREE.Vector3(0, 250, 0));
+    DofDemo.rttCamera.lookAt(new THREE.Vector3(0, 0, 0));
     DofDemo.rttScene.add(DofDemo.rttCamera);
     // camera
     DofDemo.camera = new THREE.OrthographicCamera(-DofDemo.windowWidth / 2,
@@ -231,8 +231,7 @@ function initStatus() {
         'Render Type': ['Depth of Field', 'z-buffer', 'None'],
         'Algorithm': {
             'Forward-mapped': 0,
-            'Reversed-mapped': 1,
-            'Layered': 2
+            'Reversed-mapped': 1
         },
         'Focal Length': 0.1,
         'Focus Distance': 2,
@@ -267,8 +266,7 @@ function initStatus() {
         
     DofDemo.gui.add(DofDemo.config, 'Algorithm', {
             'Forward-mapped': 0,
-            'Reversed-mapped': 1,
-            'Layered': 2
+            'Reversed-mapped': 1
         }).onChange(function(value) {
             DofDemo.material.screen.uniforms.algorithm.value = value;
         });
@@ -308,7 +306,7 @@ function initStatus() {
         .onChange(function(value) {
             DofDemo.material.screen.uniforms.layerCount.value = value;
         });
-    
+        
     // show render
     $('#loading').fadeOut();
 }
@@ -332,12 +330,13 @@ function addObjects() {
     // plane
     var chessTexture = THREE.ImageUtils.loadTexture('image/chess.jpg');
     chessTexture.wrapS = chessTexture.wrapT = THREE.RepeatWrapping;
-    chessTexture.repeat.set(16, 16);
+    chessTexture.repeat.set(32, 32);
     DofDemo.material.plane = new THREE.MeshLambertMaterial({
         color: 0x666666,
         map: chessTexture
     });
-    DofDemo.mesh.plane = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000));
+    DofDemo.mesh.plane = new THREE.Mesh(
+            new THREE.PlaneGeometry(10000, 10000));
     DofDemo.mesh.plane.rotation.x = -Math.PI / 2;
     DofDemo.rttScene.add(DofDemo.mesh.plane);
     

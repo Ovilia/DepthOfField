@@ -2,9 +2,9 @@
 precision highp float;
 #endif
 
-#define MAX_RADIUS 20
-#define MAX_RADIUS_F 20.0
-#define MAX_LENGTH 40
+#define MAX_RADIUS 40
+#define MAX_RADIUS_F 40.0
+#define MAX_LENGTH 80
 
 varying vec2 vUv;
 
@@ -52,7 +52,8 @@ float getCoc(float worldDepth) {
 
 // blur using forward-mapped algorithm, return blurred color
 vec4 getForwardResult(float thisCoc, float thisDepth) {
-    vec4 sum;
+    vec3 sum;
+    float weightSum = 0.0;
     int cnt = 0;
     int cocInt = int(maxBlur);
     int cocLength = 2 * cocInt;
@@ -60,25 +61,31 @@ vec4 getForwardResult(float thisCoc, float thisDepth) {
         if (i < cocLength) {
             for (int j = 0; j < MAX_RADIUS; ++j) {
                 if (j < cocLength) {
-                    vec2 neighbor = vec2(
-                            vUv.x + (float(i) - maxBlur) / wSplitCnt,
-                            vUv.y + (float(j) - maxBlur) / hSplitCnt);
-                    
-                    float neighborDepth = texture2D(depth, neighbor).r;
-                    float neighborZWorld = getWorldDepth(neighborDepth);
-                    int neighborCoc = int(getCoc(neighborZWorld));
-                    
-                    // blur if this is inside neighbor's coc
-                    if (i - cocInt < neighborCoc && i - cocInt > -neighborCoc
-                            && j - cocInt < neighborCoc
-                            && j - cocInt > -neighborCoc) {
-                        if (neighborDepth > thisDepth - 0.05
-                                && neighborDepth > 0.01) {
-                            sum += texture2D(texture, neighbor);
-                            cnt += 1;
-                        } else if (neighborDepth < 0.01) {
-                            // black border
-                            cnt += 1;
+                    if (i == cocInt && j == cocInt) {
+                        // this pixel
+                        float weight = maxBlur * 50.0;
+                        sum += texture2D(texture, vUv).rgb * weight;
+                        weightSum += weight;
+                        cnt += 1;
+                    } else {
+                        vec2 neighbor = vec2(
+                                vUv.x + (float(i) - maxBlur) / wSplitCnt,
+                                vUv.y + (float(j) - maxBlur) / hSplitCnt);
+                        
+                        float neighborDepth = texture2D(depth, neighbor).r;
+                        float neighborZWorld = getWorldDepth(neighborDepth);
+                        int neighborCoc = int(getCoc(neighborZWorld));
+                        
+                        // blur if this is inside neighbor's coc
+                        if (i - neighborCoc <= cocInt && i + neighborCoc >= cocInt
+                                && j - neighborCoc <= cocInt
+                                && j + neighborCoc >= cocInt) {
+                            if (neighborDepth > thisDepth - 0.01) {
+                                float weight = maxBlur - float(neighborCoc - i);
+                                sum += texture2D(texture, neighbor).rgb * weight;
+                                weightSum += weight;
+                                cnt += 1;
+                            }
                         }
                     }
                 } else {
@@ -94,8 +101,8 @@ vec4 getForwardResult(float thisCoc, float thisDepth) {
         return texture2D(texture, vUv);
     } else {
         float cntFloat = float(cnt);
-        return vec4(sum.r / cntFloat, sum.g / cntFloat,
-                sum.b / cntFloat, 1.0);
+        return vec4(sum.r / weightSum, sum.g / weightSum,
+                sum.b / weightSum, 1.0);
     }
 }
 
