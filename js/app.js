@@ -207,7 +207,6 @@ function loadShader() {
         DofDemo.mesh.budda.position.set(200, 0, -400);
         DofDemo.mesh.budda.scale.set(50, 50, 50);
         DofDemo.mesh.budda.rotation.y = Math.PI;
-        //DofDemo.mesh.budda.scale.set(4000, 4000, 4000);
         DofDemo.rttScene.add(DofDemo.mesh.budda);
         
         checkAllLoaded();

@@ -77,12 +77,15 @@ vec4 getForwardResult(float thisCoc, float thisDepth) {
                         int neighborCoc = int(getCoc(neighborZWorld));
                         
                         // blur if this is inside neighbor's coc
-                        if (i - neighborCoc <= cocInt && i + neighborCoc >= cocInt
+                        if (i - neighborCoc <= cocInt
+                                && i + neighborCoc >= cocInt
                                 && j - neighborCoc <= cocInt
                                 && j + neighborCoc >= cocInt) {
                             if (neighborDepth > thisDepth - 0.01) {
-                                float weight = maxBlur - float(neighborCoc - i);
-                                sum += texture2D(texture, neighbor).rgb * weight;
+                                float weight = maxBlur - float(neighborCoc
+                                        - i);
+                                sum += texture2D(texture, neighbor).rgb
+                                        * weight;
                                 weightSum += weight;
                                 cnt += 1;
                             }
