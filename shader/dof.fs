@@ -81,14 +81,14 @@ vec4 getForwardResult(float thisCoc, float thisDepth) {
                                 && i + neighborCoc >= cocInt
                                 && j - neighborCoc <= cocInt
                                 && j + neighborCoc >= cocInt) {
-                            if (neighborDepth > thisDepth - 0.01) {
+                            //if (neighborDepth > thisDepth - 0.01) {
                                 float weight = maxBlur - float(neighborCoc
                                         - i);
                                 sum += texture2D(texture, neighbor).rgb
                                         * weight;
                                 weightSum += weight;
                                 cnt += 1;
-                            }
+                            //}
                         }
                     }
                 } else {

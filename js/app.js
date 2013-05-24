@@ -382,7 +382,7 @@ function addObjects() {
         color: 0x99ff00
     });
     DofDemo.mesh.knot = new THREE.Mesh(new THREE.TorusKnotGeometry(100));
-    DofDemo.mesh.knot.position.set(-800, 500, -500);
+    DofDemo.mesh.knot.position.set(-500, 500, -500);
     DofDemo.rttScene.add(DofDemo.mesh.knot);
     
     // render to target material
