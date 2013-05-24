@@ -29,6 +29,7 @@ var DofDemo = {
     
     material: {
         depth: null,
+        budda: null,
         
         plane: null,
         box: null,
@@ -39,9 +40,12 @@ var DofDemo = {
         plane: null,
         box: null,
         knot: null,
+        budda: null,
         
         screenPlane: null
     },
+    
+    isKnotRotating: false,
     
     mousePressed: false,
     mousePressX: 0,
@@ -179,7 +183,7 @@ function initFramebuffer() {
 // load vertex shaders and fragment shaders
 function loadShader() {
     var loadedCnt = 0;
-    var totalCnt = 4; // 4 shaders
+    var totalCnt = 5; // 4 shaders
     
     function checkAllLoaded() {
         ++loadedCnt;
@@ -191,6 +195,24 @@ function loadShader() {
             animate();
         }
     }
+    
+    var loader = new THREE.OBJMTLLoader();
+    loader.addEventListener('load', function(event) {
+        DofDemo.mesh.budda = event.content;
+        DofDemo.mesh.budda.traverse(function(child){
+            if (child instanceof THREE.Mesh) {
+                DofDemo.material.budda = child.material;
+            }
+        });
+        DofDemo.mesh.budda.position.set(200, 0, -400);
+        DofDemo.mesh.budda.scale.set(50, 50, 50);
+        DofDemo.mesh.budda.rotation.y = Math.PI;
+        //DofDemo.mesh.budda.scale.set(4000, 4000, 4000);
+        DofDemo.rttScene.add(DofDemo.mesh.budda);
+        
+        checkAllLoaded();
+    });
+    loader.load('model/budda.obj', 'model/budda.mtl');
     
     $.get('shader/dof.vs', function(data){
         console.log('dof.vs loaded.');
@@ -336,10 +358,10 @@ function addObjects() {
     DofDemo.rttScene.add(DofDemo.mesh.plane);
     
     // boxes
-    var pos = [[350, 375, 200], [300, 150, 200], [0, 125, 700], 
+    var pos = [[350, 500, 200], [300, 150, 200], [0, 125, 700], 
             [-400, 250, 300], [-500, 650, 300]];
     var rot = [0, Math.PI / 3, 0, Math.PI / 5, 0];
-    var size = [150, 300, 250, 500, 300];
+    var size = [400, 300, 250, 500, 300];
     DofDemo.material.box = new Array(pos.length);
     DofDemo.mesh.box = new Array(pos.length);
     for (var i in pos) {
@@ -358,10 +380,10 @@ function addObjects() {
     
     // torus knot
     DofDemo.material.knot = new THREE.MeshLambertMaterial({
-        color: 0xffaa00
+        color: 0x99ff00
     });
     DofDemo.mesh.knot = new THREE.Mesh(new THREE.TorusKnotGeometry(100));
-    DofDemo.mesh.knot.position.set(100, 500, -500);
+    DofDemo.mesh.knot.position.set(-800, 500, -500);
     DofDemo.rttScene.add(DofDemo.mesh.knot);
     
     // render to target material
@@ -465,6 +487,17 @@ function setMaterial(renderType) {
             DofDemo.mesh[name].material = material;
         }
     }
+    
+    // budda
+    DofDemo.mesh.budda.traverse(function(child){
+        if (child instanceof THREE.Mesh) {
+            if (renderType === DofDemo.RenderType.DEPTH) {
+                child.material = DofDemo.material.depth;
+            } else {
+                child.material = DofDemo.material.budda;
+            }
+        }
+    });
 }
 
 // call in each frame
@@ -482,9 +515,11 @@ function animate() {
 function render() {
     DofDemo.renderer.clear();
     
-    DofDemo.mesh.knot.rotation.x += 0.01;
-    DofDemo.mesh.knot.rotation.y += 0.02;
-    DofDemo.mesh.knot.rotation.z += 0.015;
+    if (DofDemo.isKnotRotating) {
+        DofDemo.mesh.knot.rotation.x += 0.01;
+        DofDemo.mesh.knot.rotation.y += 0.02;
+        DofDemo.mesh.knot.rotation.z += 0.015;
+    }
     
     if (DofDemo.renderType === DofDemo.RenderType.DOF) {
         // render to texture
