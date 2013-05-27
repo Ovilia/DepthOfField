@@ -260,7 +260,8 @@ function initStatus() {
         'Min CoC': 1,
         'Max CoC': 2.5,
         'Max Blur': 10,
-        'Aperture Diameter': 0.05
+        'Aperture Diameter': 0.05,
+        'Big Model': true
     };
     
     // gui event
@@ -313,7 +314,7 @@ function initStatus() {
             DofDemo.material.screen.uniforms.maxC.value = value * 1000;
         });
     
-    DofDemo.gui.add(DofDemo.config, 'Max Blur', 0, 20)
+    DofDemo.gui.add(DofDemo.config, 'Max Blur', 0, 30)
         .onChange(function(value) {
             DofDemo.material.screen.uniforms.maxBlur.value = value;
         });
@@ -321,6 +322,15 @@ function initStatus() {
     DofDemo.gui.add(DofDemo.config, 'Aperture Diameter', 0.001, 0.1)
         .onChange(function(value) {
             DofDemo.material.screen.uniforms.aperture.value = value * 1000;
+        });
+        
+    DofDemo.gui.add(DofDemo.config, 'Big Model', true)
+        .onChange(function(value) {
+            if (value) {
+                DofDemo.rttScene.add(DofDemo.mesh.budda);
+            } else {
+                DofDemo.rttScene.remove(DofDemo.mesh.budda);
+            }
         });
         
     // show render
@@ -488,15 +498,17 @@ function setMaterial(renderType) {
     }
     
     // budda
-    DofDemo.mesh.budda.traverse(function(child){
-        if (child instanceof THREE.Mesh) {
-            if (renderType === DofDemo.RenderType.DEPTH) {
-                child.material = DofDemo.material.depth;
-            } else {
-                child.material = DofDemo.material.budda;
+    if (DofDemo.config['Big Model']) {
+        DofDemo.mesh.budda.traverse(function(child){
+            if (child instanceof THREE.Mesh) {
+                if (renderType === DofDemo.RenderType.DEPTH) {
+                    child.material = DofDemo.material.depth;
+                } else {
+                    child.material = DofDemo.material.budda;
+                }
             }
-        }
-    });
+        });
+    }
 }
 
 // call in each frame
